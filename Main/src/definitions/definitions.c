@@ -24,3 +24,21 @@ bool freeJSONObj(cJSON* json)
     return true; 
 }
 
+bool RaiseEarthQuakeAlarm(EARTHqUAKER_CONFIG_T* earthquake){
+
+  //use locks to modify the state of the alarm 
+  ESP_LOGI(TAG, "Earthquake Alarm!"); 
+//   strip.setBrightness(255); // The breathe intensity might have the brightness low
+//   for (int i = 0; i < 10; i++)
+//   {
+//     if (EarthquakeAlarmBool)
+//     {
+//       delay(500);
+//       NeoPixelStatus(AlarmLEDColor); // Alarm - blink red or orange
+//       AlarmBuzzer();
+//     }
+//     client.loop(); // Process any incoming MQTT topics (which might stop the alarm)
+//   }
+//   strip.setBrightness(breatheintensity); // reset the brightness to the prior intensity
+//   digitalWrite(io, LOW);     
+}
