@@ -11,24 +11,23 @@
 //NTP Time Stamp Servers from espidf lib 
 #include "esp_sntp.h"
 
-struct CONFIG_MQTT {
+typedef struct {
     char* MQTT_ADDRESS; 
     char* MQTT_USERNAME; 
     char* MQTT_PASSWORD; 
     uint16_t PORT; 
-}; 
+} CONFIG_MQTT_T; 
 
-struct CONFIG_WIFI {
+typedef struct {
     char* SSID; 
     char* PASSWORD; 
-
-}; 
+} CONFIG_WIFI_T; 
 
 /**
  * @brief configs for the earthquake system
  */
 typedef struct {
-    bool EARTHQUAKE; 
+    bool EARTHQUAKE_ALARM_STATE; 
     uint8_t EARTHQUAKE_INDICATOR; // LED COLOR FOR THE EARTHQUAKE 
 } EARTHQUAKE_CONFIG_T; 
 
@@ -72,8 +71,8 @@ typedef struct {
        char* MACADDRESS; //Mac address of the system 
        char* IP;         // IP address of the system
        char* USER;       // code for the user 
-       char* STATION;    // 5 digit station code 
-       char* NETWORK;    // 2 Digit station code 
+       char STATION[5];    // 5 digit station code 
+       char NETWORK[2];    // 2 Digit station code 
 } SYSTEM_INFO_T; 
 
 /**
@@ -85,6 +84,13 @@ typedef struct  {
     SYSTEM_INFO_T* systemInfo;      // General information about the system 
     ACCEL_T* accelerationInfo; 
 } SYSTEM_STATUS_T; 
+
+/**
+ * @brief 
+ *      Function initializes the system information
+ *      It allocates memory based on system defintions then appends the information to the system 
+ */
+bool systemInit(); 
 
 
 
@@ -125,4 +131,17 @@ const char* getJSONObjectItem(cJSON* json, const char* objname);
  *         bool false - when the operation fails
  */
 bool freeJSONObj(cJSON* json); 
+
+
+// DECLARE GLOBAL VARIABLES 
+extern CONFIG_MQTT_T CONFIG_MQTT; 
+extern CONFIG_WIFI_T CONFIG_WIFI; 
+extern EARTHQUAKE_CONFIG_T EARTHQUAKE; 
+extern NETWORKSTATUS_T NETWORKSTATUS; 
+
+extern SYSTEM_STATUS_T SYSTEM_STATUS; 
+
+
+
+
 
