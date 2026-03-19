@@ -5,6 +5,12 @@
 
 
 #include "definitions.h"
+#include "esp_log.h"
+#include "esp_sntp.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "sys/time.h"
 
 
 
@@ -12,6 +18,10 @@
 #include <cjson/cJSON.h>
 //NTP Time Stamp Servers from espidf lib 
 #include "esp_sntp.h"
+
+
+//TRACK THE NUMBER OF BOOTS IN THE SYSTEM
+RTC_DATA_ATTR static int boot_count = 0;
 
 typedef struct {
     char* MQTT_ADDRESS; 
@@ -46,6 +56,8 @@ bool RaiseEarthQuakeAlarm(EARTHQUAKE_CONFIG_T* earthquake);
  */
 typedef struct {
     double deviceTime; 
+    int8_t TIME_ZONE = 0; 
+    uint8_t DST = 0; 
 
 } TIMESTEP_T; 
 
@@ -151,20 +163,54 @@ extern SYSTEM_STATUS_T SYSTEM_STATUS;
  *        System Queue definition 
  */
 
- #include "freertos/FreeRTOS.h"
- #include "freertos/queue.h"
 
- extern QueueHandle_t sensorDataQueue; 
- extern QueueHandle_t systemStatusQueue; 
- extern QueueHandle_t alarmInfoQueue; 
+extern QueueHandle_t sensorDataQueue; 
+extern QueueHandle_t systemStatusQueue; 
+extern QueueHandle_t alarmInfoQueue; 
+
+//Semaphore to synchronize access to system status 
+extern SemaphoreHandle_t xSemaphore_systemStatus; 
+//Semaphore to synchronize access to system alarm 
+extern SemaphoreHandle_t xSemaphore_systemAlarm; 
+//Semaphore to synchronize access to system communication channel 
+extern SemaphoreHandle_t xSemaphore_systemCommChannel; 
+
+/**
+ * @brief 
+ *      Initialize system semaphores used for synchronization of resources 
+ * @return 
+ *         True - Successful creation of semaphores 
+ *         False - Failed to create system Semaphores
+ */
+bool systemSemaphoreInit(); 
+
 
 
 /**
  * @brief 
  *        Function initializes all the system queues 
+ * @return 
+ *        return true when initialization of Queues is complete 
+ *        returns false when initialization of System Queues is false 
+ */
+bool systemQueueInit();
+
+
+/**
+ * @brief 
+ *        Function to connect to SNTP servers across the world. 
+ *        Generates timestamp 
  * 
  */
-bool systemQueueInit(); 
+
+#include "esp_sntp.h"
+
+bool init_sntp(); 
+static void sntp_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data); 
 
 
-
+/**
+ * @brief 
+ *         Returns UTC time in second 
+ */
+char* getLocalTime(); 
