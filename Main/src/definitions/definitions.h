@@ -6,6 +6,8 @@
 
 #include "definitions.h"
 
+
+
 //JSON lib
 #include <cjson/cJSON.h>
 //NTP Time Stamp Servers from espidf lib 
@@ -35,7 +37,7 @@ typedef struct {
  * @brief Function to raise earth quake alarm 
  * @param earthquake returns 
  */
-bool RaiseEarthQuakeAlarm(EARTHqUAKER_CONFIG_T* earthquake); 
+bool RaiseEarthQuakeAlarm(EARTHQUAKE_CONFIG_T* earthquake); 
 
 
 /**
@@ -83,6 +85,7 @@ typedef struct  {
     NETWORKSTATUS_T* networkStatus; 
     SYSTEM_INFO_T* systemInfo;      // General information about the system 
     ACCEL_T* accelerationInfo; 
+    const char* TAG; 
 } SYSTEM_STATUS_T; 
 
 /**
@@ -142,6 +145,26 @@ extern NETWORKSTATUS_T NETWORKSTATUS;
 extern SYSTEM_STATUS_T SYSTEM_STATUS; 
 
 
+
+/**
+ * @brief 
+ *        System Queue definition 
+ */
+
+ #include "freertos/FreeRTOS.h"
+ #include "freertos/queue.h"
+
+ extern QueueHandle_t sensorDataQueue; 
+ extern QueueHandle_t systemStatusQueue; 
+ extern QueueHandle_t alarmInfoQueue; 
+
+
+/**
+ * @brief 
+ *        Function initializes all the system queues 
+ * 
+ */
+bool systemQueueInit(); 
 
 
 

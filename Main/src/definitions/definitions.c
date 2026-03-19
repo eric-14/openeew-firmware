@@ -44,8 +44,10 @@ ACCEL_T acceleration = {
 SYSTEM_STATUS_T SYSTEM_STATUS = {
     .networkStatus = &NETWORKSTATUS, 
     .systemInfo = &SYSTEM_INFO, 
-    .accelerationInfo = &acceleration 
+    .accelerationInfo = &acceleration, 
+    .TAG = "MAIN" 
 }; 
+
 
 cJSON* parse_string(const char* json)
 {
@@ -73,7 +75,7 @@ bool freeJSONObj(cJSON* json)
 bool RaiseEarthQuakeAlarm(EARTHqUAKER_CONFIG_T* earthquake){
 
   //use locks to modify the state of the alarm 
-  ESP_LOGI(TAG, "Earthquake Alarm!"); 
+  ESP_LOGI(SYSTEM_STATUS.TAG, "Earthquake Alarm!"); 
 //   strip.setBrightness(255); // The breathe intensity might have the brightness low
 //   for (int i = 0; i < 10; i++)
 //   {
@@ -95,3 +97,22 @@ bool systemInit()
 
 }
 
+
+QueueHandle_t sensorDataQueue = NULL; 
+QueueHandle_t systemInfoQueue = NULL; 
+QueueHandle_t alarmInfoQueue = NULL;  
+
+bool systemQueueInit()
+{
+    sensorDataQueue = xQueueCreate(1, sizeof(ACCEL_T)); 
+    systemStatusQueue = xQueueCreate(1, sizeof(SYSTEM_STATUS_T)); 
+    alarmInfoQueue = xQueueCreate(1, sizeof(EARTHQUAKE_CONFIG_T)); 
+    if (sensorDataQueue == NULL || systemStatusQueue == NULL || alarmInfoQueue== NULL)
+    {
+        //error in creation of queues 
+        ESP_LOGE(SYSTEM_STATUS.TAG, "System Queue initialization Failed!"); 
+        return false; 
+    }
+    ESP_LOGI(SYSTEM_STATUS.TAG, "Initialization of system Queue complete");
+    return true; 
+}
