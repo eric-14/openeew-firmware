@@ -26,7 +26,7 @@ NETWORKSTATUS_T NETWORKSTATUS = {
 }; 
 
 SYSTEM_INFO_T SYSTEM_INFO {
-    .DEVICENAME = "", 
+    .DEVICENAME = "SeismicDevice", 
     .DEVICEID = "", 
     .MACADDRESS= "", 
     .IP = "", 
@@ -72,7 +72,8 @@ bool freeJSONObj(cJSON* json)
     return true; 
 }
 
-bool raiseEarthQuakeAlarm(EARTHqUAKER_CONFIG_T* earthquake){
+bool raiseEarthQuakeAlarm(EARTHqUAKER_CONFIG_T* earthquake)
+{
 
   //use locks to modify the state of the alarm 
   ESP_LOGI("RaiseEarthQuakeAlarm", "Earthquake Alarm!"); 
@@ -176,6 +177,144 @@ bool systemSemaphoreInit()
     ESPLOGI("Semaphore Creation", "Completed Initialization of Semaphores"); 
     return true; 
 }
+
+#define EXAMPLE_ESP_MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
+
+
+static EventGroupHandle_t s_wifi_event_group;
+
+static int s_retry_num = 0;
+
+static void event_handler(void* arg, esp_event_base_t event_base,
+                                int32_t event_id, void* event_data)
+{
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        if (s_retry_num < EXAMPLE_ESP_MAXIMUM_RETRY) {
+            esp_wifi_connect();
+            s_retry_num++;
+            ESP_LOGI(TAG, "retry to connect to the AP");
+        } else {
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        }
+        ESP_LOGI(TAG,"connect to the AP fail");
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        s_retry_num = 0;
+        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+    }
+}
+
+bool wifi_init_sta()
+{
+    s_wifi_event_group = xEventGroupCreate();
+
+    esp_err_t err = esp_netif_init();
+    if(err) return false; 
+
+
+    esp_err_t err = esp_event_loop_create_default();
+    if(err) return false; 
+
+    esp_err_t err = esp_netif_create_default_wifi_sta();
+    if(err) return false; 
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    esp_err_t err = esp_wifi_init(&cfg);
+    if(err) return false; 
+
+
+    esp_event_handler_instance_t instance_any_id;
+    esp_event_handler_instance_t instance_got_ip;
+    esp_err_t err = esp_event_handler_instance_register(WIFI_EVENT,ESP_EVENT_ANY_ID,&event_handler,NULL,&instance_any_id);
+    if(err) return false; 
+    esp_err_t err = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,&event_handler,NULL, &instance_got_ip);
+    if(err) return false; 
+
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = CONFIG_WIFI.SSID,
+            .password = CONFIG_WIFI.PASSWORD,
+            /* Setting a password implies station will connect to all security modes including WEP/WPA.
+             * However these modes are deprecated and not advisable to be used. Incase your Access point
+             * doesn't support WPA2, these mode can be enabled by commenting below line */
+	     .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+
+            .pmf_cfg = {
+                .capable = true,
+                .required = false
+            },
+        },
+    };
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
+    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
+    ESP_ERROR_CHECK(esp_wifi_start() );
+
+    ESP_LOGI(TAG, "wifi_init_sta finished.");
+
+    /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
+     * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+            pdFALSE,
+            pdFALSE,
+            portMAX_DELAY);
+
+    /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which event actually
+     * happened. */
+    if (bits & WIFI_CONNECTED_BIT) {
+        ESP_LOGI("WIFI INIT", "connected to ap SSID:%s password:%s",
+                 CONFIG_WIFI.SIID, CONFIG_WIFI.PASSWORD);
+    } else if (bits & WIFI_FAIL_BIT) {
+        ESP_LOGI("WIFI INIT", "Failed to connect to SSID:%s, password:%s",
+                 CONFIG_WIFI.SSID, CONFIG_WIFI.PASSWORD);
+    } else {
+        ESP_LOGE("WIFI INIT", "UNEXPECTED EVENT");
+    }
+
+    /* The event will not be processed after unregister */
+    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, instance_got_ip));
+    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, instance_any_id));
+    vEventGroupDelete(s_wifi_event_group);
+
+
+
+    //updte the wifi status of the device 
+    SYSTEM_STATUS->networkStatus.WIFICONNECTED = true; 
+}
+
+/** Event handler for Ethernet events */
+static void eth_event_handler(void *arg, esp_event_base_t event_base,
+                              int32_t event_id, void *event_data)
+{
+    uint8_t mac_addr[6] = {0};
+    /* we can get the ethernet driver handle from event data */
+    esp_eth_handle_t eth_handle = *(esp_eth_handle_t *)event_data;
+
+    switch (event_id) {
+    case ETHERNET_EVENT_CONNECTED:
+        esp_eth_ioctl(eth_handle, ETH_CMD_G_MAC_ADDR, mac_addr);
+        ESP_LOGI(TAG, "Ethernet Link Up");
+        ESP_LOGI(TAG, "Ethernet HW Addr %02x:%02x:%02x:%02x:%02x:%02x",
+                 mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+        break;
+    case ETHERNET_EVENT_DISCONNECTED:
+        ESP_LOGI(TAG, "Ethernet Link Down");
+        break;
+    case ETHERNET_EVENT_START:
+        ESP_LOGI(TAG, "Ethernet Started");
+        break;
+    case ETHERNET_EVENT_STOP:
+        ESP_LOGI(TAG, "Ethernet Stopped");
+        break;
+    default:
+        break;
+    }
+}
+
 bool systemInit()
 {
     ESP_ERROR_CHECK( nvs_flash_init()); 
@@ -195,6 +334,30 @@ bool systemInit()
         ESPLOGE("System Init", "Failed to initialize system Semaphores"); 
         return false; 
     } 
+   
+    //wifi connected 
+    if(SYSTEM_STATUS->networkStatus.WIFICONNECTED == false && SYSTEM_STATUS->networkStatus.ETHCONNECTED == false ) {
+        ESPLOGI("SYS INIT", "STARTING WIFI INITIALIZATION"); 
+        bool wifi_state = wifi_init_sta(); 
+        if (!wifi_state)
+        {
+            ESPLOGE("SYSTEM INIT", "Failed to Initialized WIFI service"); 
+        }
+        //change the hostname of the device 
+        esp_netif_set_hostname(netif, SYSTEM_STATUS->systemInfo.DEVICENAME);
+        ESPLOGI("SYS INIT", "System Hostname is %s", SYSTEM_STATUS->systemInfo.DEVICENAME); 
+        // Indicate the FLAG to show WIFI is connected  
+        SYSTEM_STATUS->networkStatus.WIFICONNECTED = true; 
+    }
+
+    //
+    if(SYSTEM_STATUS->networkStatus.WIFICONNECTED == false && SYSTEM_STATUS->networkStatus.ETHCONNECTED == false ) {
+        ESPLOGI("SYSTEM INIT", "Ethernet handler added to the system "); 
+        esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL); 
+        // register Ethernet event handler (to deal with user specific stuffs when event like link up/down happened)
+        SYSTEM_STATUS->networkStatus.ETHCONNECTED = true; 
+    } 
+
+
 
 }
-

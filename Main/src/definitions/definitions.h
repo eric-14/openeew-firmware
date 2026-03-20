@@ -214,3 +214,5 @@ static void sntp_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
  *         Returns UTC time in second 
  */
 char* getLocalTime(); 
+void wifi_init_sta(); 
+static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_id, void* event_data)
